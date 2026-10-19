@@ -21,13 +21,8 @@ pip install -r requirements.txt
 python app.py        # open http://127.0.0.1:8050
 ```
 
-## Deploy free on Render (public URL, no sign-in for viewers)
-1. Create a public GitHub repo (e.g. `stock-dashboard`) and push these files to it.
-2. Go to https://render.com, sign in with GitHub, choose **New > Web Service**, pick the repo.
-3. Settings: Runtime **Python**, Build `pip install -r requirements.txt`,
-   Start `gunicorn app:server --workers 1 --threads 4 --timeout 120`, Instance **Free**.
-   (Or choose **New > Blueprint** and Render reads `render.yaml` for you.)
-4. Deploy. Your URL will look like `https://big-tech-stock-dashboard.onrender.com`.
-
-Note: free Render services sleep after 15 minutes idle; the first visit after that takes about
-a minute to wake. Open the link yourself right before your professor is likely to check it.
+## Deploy on Vercel
+1. Push this folder to a public GitHub repo (e.g. `Gusbgv/stock-dashboard`).
+2. On vercel.com choose **Add New > Project**, import the repo, leave Framework Preset as **Other**, and click **Deploy**.
+   `vercel.json` tells Vercel to run `app.py` as a Python function. No environment variables are needed.
+3. Every later `git push` redeploys automatically.

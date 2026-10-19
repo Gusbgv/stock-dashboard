@@ -1,0 +1,10 @@
+{
+  "builds": [
+    {
+      "src": "app.py",
+      "use": "@vercel/python",
+      "config": { "includeFiles": ["assets/**"] }
+    }
+  ],
+  "routes": [{ "src": "/(.*)", "dest": "app.py" }]
+}

@@ -130,10 +130,10 @@ def line_chart(df, title, y_title, y_fmt, hover_fmt, y_type="linear", zero_line=
 # ---------------------------------------------------------------------------
 # App layout
 # ---------------------------------------------------------------------------
-app = Dash(__name__, title="Big Tech Stock Comparison")
-server = app.server  # for gunicorn
+dash_app = Dash(__name__, title="Big Tech Stock Comparison")
+server = dash_app.server
+app = server  # WSGI entry point used by Vercel (and gunicorn)
 
-today = date.today()
 PRESETS = {"3M": 91, "6M": 182, "YTD": None, "1Y": 365, "3Y": 365 * 3, "5Y": 365 * 5}
 
 
@@ -145,75 +145,80 @@ def card(graph_id, note):
     ])
 
 
-app.layout = html.Div(className="page", children=[
-    html.Header(className="header", children=[
-        html.Div([
-            html.H1("Big Tech Stock Comparison Dashboard"),
-            html.P(f"{AUTHOR}  |  {COURSE}", className="byline"),
+def serve_layout():
+    today = date.today()
+    return html.Div(className="page", children=[
+        html.Header(className="header", children=[
+            html.Div([
+                html.H1("Big Tech Stock Comparison Dashboard"),
+                html.P(f"{AUTHOR}  |  {COURSE}", className="byline"),
+            ]),
+            html.Div(id="data-stamp", className="stamp"),
         ]),
-        html.Div(id="data-stamp", className="stamp"),
-    ]),
 
-    html.Section(className="filters", children=[
-        html.Div(className="filter", children=[
-            html.Label("Companies (choose 3 or more)", htmlFor="tickers"),
-            dcc.Dropdown(
-                id="tickers", multi=True, value=DEFAULT_TICKERS, clearable=False,
-                options=[{"label": f"{n} ({t})", "value": t} for t, n in COMPANIES.items()],
-            ),
+        html.Section(className="filters", children=[
+            html.Div(className="filter", children=[
+                html.Label("Companies (choose 3 or more)", htmlFor="tickers"),
+                dcc.Dropdown(
+                    id="tickers", multi=True, value=DEFAULT_TICKERS, clearable=False,
+                    options=[{"label": f"{n} ({t})", "value": t} for t, n in COMPANIES.items()],
+                ),
+            ]),
+            html.Div(className="filter", children=[
+                html.Label("Date range", htmlFor="dates"),
+                dcc.DatePickerRange(
+                    id="dates", display_format="MMM D, YYYY",
+                    start_date=today - timedelta(days=365), end_date=today,
+                    min_date_allowed=today - timedelta(days=365 * HISTORY_YEARS), max_date_allowed=today,
+                ),
+            ]),
+            html.Div(className="filter", children=[
+                html.Label("Quick range"),
+                dcc.RadioItems(id="preset", options=list(PRESETS), value="1Y",
+                               inline=True, className="preset"),
+            ]),
         ]),
-        html.Div(className="filter", children=[
-            html.Label("Date range", htmlFor="dates"),
-            dcc.DatePickerRange(
-                id="dates", display_format="MMM D, YYYY",
-                start_date=today - timedelta(days=365), end_date=today,
-                min_date_allowed=today - timedelta(days=365 * HISTORY_YEARS), max_date_allowed=today,
-            ),
+
+        html.Div(id="alert"),
+        html.Div(id="selection-summary", className="selection"),
+
+        html.Div(className="grid", children=[
+            card("fig-return", "All companies rebased to 0% on the first day of the range, so growth compares fairly regardless of share price."),
+            card("fig-price", "Log scale: equal vertical distances mean equal percentage moves, so stocks priced very differently stay comparable."),
+            card("fig-vol", "Annualized standard deviation of daily returns over a rolling 30-trading-day window. Higher means a bumpier ride."),
+            card("fig-drawdown", "How far each stock sits below its own highest close within the range. 0% means a new high."),
+            card("fig-dist", "Spread of single-day returns. The box covers the middle 50% of days; points beyond the whiskers are unusually large moves."),
+            card("fig-dollarvol", "Average shares traded per day times price, in billions of US dollars: how much money changes hands daily."),
+            card("fig-corr", "Correlation of daily returns between each pair (1 = always move together, 0 = unrelated)."),
         ]),
-        html.Div(className="filter", children=[
-            html.Label("Quick range"),
-            dcc.RadioItems(id="preset", options=list(PRESETS), value="1Y",
-                           inline=True, className="preset"),
+
+        html.Section(className="insights", children=[
+            html.H2("Key differences revealed"),
+            html.Div(id="insights"),
         ]),
-    ]),
 
-    html.Div(id="alert"),
-    html.Div(id="selection-summary", className="selection"),
+        html.Footer(className="footer", children=[
+            html.P(f"{AUTHOR}  |  {COURSE}"),
+            html.P("Data: Yahoo Finance via yfinance, split- and dividend-adjusted daily closes, refreshed hourly. "
+                   "For educational purposes only, not investment advice."),
+        ]),
+    ])
 
-    html.Div(className="grid", children=[
-        card("fig-return", "All companies rebased to 0% on the first day of the range, so growth compares fairly regardless of share price."),
-        card("fig-price", "Log scale: equal vertical distances mean equal percentage moves, so stocks priced very differently stay comparable."),
-        card("fig-vol", "Annualized standard deviation of daily returns over a rolling 30-trading-day window. Higher means a bumpier ride."),
-        card("fig-drawdown", "How far each stock sits below its own highest close within the range. 0% means a new high."),
-        card("fig-dist", "Spread of single-day returns. The box covers the middle 50% of days; points beyond the whiskers are unusually large moves."),
-        card("fig-dollarvol", "Average shares traded per day times price, in billions of US dollars: how much money changes hands daily."),
-        card("fig-corr", "Correlation of daily returns between each pair (1 = always move together, 0 = unrelated)."),
-    ]),
 
-    html.Section(className="insights", children=[
-        html.H2("Key differences revealed"),
-        html.Div(id="insights"),
-    ]),
-
-    html.Footer(className="footer", children=[
-        html.P(f"{AUTHOR}  |  {COURSE}"),
-        html.P("Data: Yahoo Finance via yfinance, split- and dividend-adjusted daily closes, refreshed hourly. "
-               "For educational purposes only, not investment advice."),
-    ]),
-])
+dash_app.layout = serve_layout
 
 
 # ---------------------------------------------------------------------------
 # Callbacks
 # ---------------------------------------------------------------------------
-@app.callback(Output("dates", "start_date"), Output("dates", "end_date"), Input("preset", "value"))
+@dash_app.callback(Output("dates", "start_date"), Output("dates", "end_date"), Input("preset", "value"))
 def apply_preset(preset):
     end = date.today()
     start = date(end.year, 1, 1) if preset == "YTD" else end - timedelta(days=PRESETS[preset])
     return start, end
 
 
-@app.callback(
+@dash_app.callback(
     Output("fig-return", "figure"), Output("fig-price", "figure"), Output("fig-vol", "figure"),
     Output("fig-drawdown", "figure"), Output("fig-dist", "figure"), Output("fig-dollarvol", "figure"),
     Output("fig-corr", "figure"), Output("insights", "children"), Output("alert", "children"),
@@ -345,4 +350,4 @@ def build_insights(tickers, cum, vol30, dd, rets, dv, corr):
 
 
 if __name__ == "__main__":
-    app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 8050)))
+    dash_app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 8050)))
